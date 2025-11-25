@@ -13,29 +13,42 @@ CORS(app)
 # Configuration pour production
 port = int(os.environ.get('PORT', 5000))
 
-# Client Groq avec clé d'environnement
-client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+# Client Groq avec gestion d'erreur
+api_key = os.environ.get("GROQ_API_KEY")
+if not api_key:
+    print("⚠️ ATTENTION: GROQ_API_KEY non définie")
+    # Crée un client avec une clé factice pour éviter l'erreur
+    client = None
+else:
+    client = Groq(api_key=api_key)
 
-# Route de test
 @app.route('/')
 def home():
     return jsonify({
         "status": "✅ Serveur Lafya en ligne !",
-        "message": "Backend opérationnel"
+        "message": "Backend opérationnel",
+        "groq_configured": client is not None
     })
 
 @app.route('/health')
 def health_check():
-    return jsonify({"status": "healthy"})
+    return jsonify({"status": "healthy", "groq_ready": client is not None})
 
-# Route principale de chat
 @app.route('/api/chat', methods=['POST'])
 def chat_with_groq():
     try:
+        # Vérifie si Groq est configuré
+        if client is None:
+            return jsonify({
+                "error": "Service IA temporairement indisponible",
+                "message": "Clé API Groq non configurée"
+            }), 503
+            
         data = request.json
         user_message = data.get('message', '')
         
-        print(f"📨 Message reçu: {user_message}")
+        if not user_message:
+            return jsonify({"error": "Message vide"}), 400
         
         chat_completion = client.chat.completions.create(
             messages=[{"role": "user", "content": user_message}],
