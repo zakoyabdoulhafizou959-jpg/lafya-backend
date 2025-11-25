@@ -10,38 +10,51 @@ import PyPDF2
 app = Flask(__name__)
 CORS(app)
 
-# Configuration pour production
-port = int(os.environ.get('PORT', 5000))
+# Debug: Affiche toutes les variables d'environnement
+print("🔍 Variables d'environnement disponibles:")
+for key in sorted(os.environ.keys()):
+    if 'API' in key or 'KEY' in key or 'GROQ' in key:
+        print(f"   {key}: {'*' * 8}")
 
-# Client Groq avec gestion d'erreur
-api_key = os.environ.get("GROQ_API_KEY")
-if not api_key:
-    print("⚠️ ATTENTION: GROQ_API_KEY non définie")
-    # Crée un client avec une clé factice pour éviter l'erreur
-    client = None
+# Configuration Groq avec debug avancé
+groq_api_key = os.environ.get("GROQ_API_KEY")
+print(f"🔑 GROQ_API_KEY détectée: {'OUI' if groq_api_key else 'NON'}")
+
+if groq_api_key:
+    try:
+        client = Groq(api_key=groq_api_key)
+        print("✅ Client Groq initialisé avec succès!")
+    except Exception as e:
+        print(f"❌ Erreur initialisation Groq: {e}")
+        client = None
 else:
-    client = Groq(api_key=api_key)
+    print("⚠️ GROQ_API_KEY non définie - mode sans IA")
+    client = None
 
 @app.route('/')
 def home():
     return jsonify({
         "status": "✅ Serveur Lafya en ligne !",
         "message": "Backend opérationnel",
-        "groq_configured": client is not None
+        "groq_configured": client is not None,
+        "service": "Production Gunicorn"
     })
 
 @app.route('/health')
 def health_check():
-    return jsonify({"status": "healthy", "groq_ready": client is not None})
+    return jsonify({
+        "status": "healthy", 
+        "groq_ready": client is not None,
+        "variables_loaded": bool(groq_api_key)
+    })
 
 @app.route('/api/chat', methods=['POST'])
 def chat_with_groq():
     try:
-        # Vérifie si Groq est configuré
         if client is None:
             return jsonify({
                 "error": "Service IA temporairement indisponible",
-                "message": "Clé API Groq non configurée"
+                "solution": "Vérifier GROQ_API_KEY dans Railway Variables"
             }), 503
             
         data = request.json
@@ -64,8 +77,6 @@ def chat_with_groq():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
+    # Seulement pour le développement local
+    port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
-
-
-
-
